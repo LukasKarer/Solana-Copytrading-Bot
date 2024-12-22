@@ -1,4 +1,4 @@
-import SolanaService from './solanaService.js';
+/* import { SolanaService } from './solanaService.js';
 
 export class UserManager {
   private static instance: UserManager;
@@ -33,4 +33,4 @@ export class UserManager {
   public removeUser(userId: string): boolean {
     return this.users.delete(userId);
   }
-} 
+}  */

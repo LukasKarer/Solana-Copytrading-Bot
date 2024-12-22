@@ -18,9 +18,19 @@
       "request": "launch",
       "name": "TypeScript Server",
       "program": "${workspaceFolder}\\server\\src\\index.ts",
-      "preLaunchTask": "tsc: build - tsconfig.json",
+      "preLaunchTask": "tsc",
       "outFiles": ["${workspaceFolder}\\server\\dist\\**\\*.js"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "TypeScript Server1",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${workspaceFolder}\\server\\src\\index.ts",
+      "runtimeArgs": ["-r", "ts-node/register", "-r", "tsconfig-paths/register"],
+      "outFiles": ["${workspaceFolder}\\server\\**\\*.js"]
     }
-
   ]
 }

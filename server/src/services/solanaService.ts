@@ -9,22 +9,22 @@ import {
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58';
-import { Config } from '../types/index.js';
 import { createJupiterApiClient, QuoteResponse } from '@jup-ag/api';
 import { ConnectionManager } from './connectionManager.js';
 
+export class SolanaService {
+  private static readonly RPC_ENDPOINT = process.env.RPC_ENDPOINT!;
+  private static readonly instances = new Map<string, SolanaService>();
 
-class SolanaService {
-  private static readonly RPC_ENDPOINT = 'https://api.mainnet-beta.solana.com';
   private connection: Connection;
   private watchedWallets: Map<string, number>;
   private ownWallet: Keypair;
-  private WSOL_ADDRESS: PublicKey;
+  private readonly WSOL_ADDRESS: PublicKey;
   private maxWsolPerTrade: number;
   private jupiter: ReturnType<typeof createJupiterApiClient>;
   private userId: string;
 
-  constructor(privateKey: string, userId: string, maxWsolPerTrade: number) {
+  private constructor(privateKey: string, userId: string, maxWsolPerTrade: number) {
     this.connection = ConnectionManager.getInstance(SolanaService.RPC_ENDPOINT).getConnection();
     this.watchedWallets = new Map();
     this.ownWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
@@ -32,6 +32,21 @@ class SolanaService {
     this.maxWsolPerTrade = maxWsolPerTrade;
     this.jupiter = createJupiterApiClient();
     this.userId = userId;
+  }
+
+  public static initialize(userId: string, privateKey: string, maxWsolPerTrade: number): void {
+    if (!this.instances.has(userId)) {
+      const instance = new SolanaService(privateKey, userId, maxWsolPerTrade);
+      this.instances.set(userId, instance);
+    }
+  }
+
+  public static getInstance(userId: string): SolanaService {
+    const instance = this.instances.get(userId);
+    if (!instance) {
+      throw new Error(`SolanaService not initialized for user ${userId}. Call initialize first.`);
+    }
+    return instance;
   }
 
   async initializeWatcher(walletAddress: string): Promise<void> {
@@ -60,8 +75,9 @@ class SolanaService {
   async removeWatcher(walletAddress: string): Promise<void> {
     try {
       const subscriptionId = this.watchedWallets.get(walletAddress);
-      if (subscriptionId) {
-        await this.connection.removeAccountChangeListener(subscriptionId);
+      if (subscriptionId || subscriptionId === 0) {
+        let status = await this.connection.removeAccountChangeListener(subscriptionId);
+        console.log('Remove account change listener status:', status);
         this.watchedWallets.delete(walletAddress);
         console.log(`Stopped watching wallet: ${walletAddress}`);
       }
@@ -265,5 +281,3 @@ class SolanaService {
     }
   }
 }
-
-export default SolanaService; 

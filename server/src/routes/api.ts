@@ -1,9 +1,7 @@
 import express, { Request, Response } from 'express';
-import { UserManager } from '../services/userManager.js';
+import { SolanaService } from '../services/solanaService.js';
 
 const router = express.Router();
-
-const userManager = UserManager.getInstance();
 
 router.post('/wallets', async (req: Request, res: Response) => {
   try {
@@ -14,7 +12,10 @@ router.post('/wallets', async (req: Request, res: Response) => {
       });
     }
 
-    const service = userManager.getOrCreateService(userId, privateKey, maxWsolPerTrade);
+    // Initialize service if it doesn't exist
+    SolanaService.initialize(userId, privateKey, maxWsolPerTrade);
+    const service = SolanaService.getInstance(userId);
+    
     await service.initializeWatcher(address);
     
     res.json({
@@ -36,11 +37,7 @@ router.delete('/wallets/:address', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'UserId is required' });
     }
 
-    const service = userManager.getService(userId);
-    if (!service) {
-      return res.status(404).json({ error: 'User service not found' });
-    }
-
+    const service = SolanaService.getInstance(userId);
     await service.removeWatcher(address);
     
     res.json({

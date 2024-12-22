@@ -1,11 +1,12 @@
+import dotenv from 'dotenv';
+
+dotenv.config({ path: './server/.env' });
+
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import apiRoutes from './routes/api.js';
-
-dotenv.config();
 
 const app: Express = express();
 
@@ -23,11 +24,12 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({
     error: 'Something went wrong!',
-    message: err.message, //process.env.NODE_ENV === 'development' ? err.message : undefined,
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
   });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+console.log('PORT:', process.env.PORT);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
