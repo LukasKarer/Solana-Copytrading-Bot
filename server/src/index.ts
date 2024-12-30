@@ -9,8 +9,10 @@ import helmet from 'helmet';
 import apiRoutes from './routes/api.js';
 import { ConnectionManager } from './services/connectionManager.js';
 import { SolanaService } from './services/solanaService.js';
+import CryptoJS from 'crypto-js'
 
 const app: Express = express();
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
 async function initializeServices() {
   try {
@@ -22,9 +24,10 @@ async function initializeServices() {
     
     for (const userSettings of settings) {
       const { userId, privateKey, maxWsolPerTrade, watchedWallets = [] } = userSettings;
+      const decryptedPrivateKey = CryptoJS.AES.decrypt(privateKey, ENCRYPTION_KEY!).toString(CryptoJS.enc.Utf8);
       
       // Initialize service for user
-      SolanaService.initialize(userId, privateKey, maxWsolPerTrade);
+      SolanaService.initialize(userId, decryptedPrivateKey, maxWsolPerTrade);
       const service = SolanaService.getInstance(userId);
       
       // Initialize watchers for all tracked wallets

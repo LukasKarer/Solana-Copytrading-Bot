@@ -66,6 +66,23 @@ export class SolanaService {
     if (!this.instances.has(userId)) {
       const instance = new SolanaService(privateKey, userId, maxWsolPerTrade, slippageBps, computeUnitPrice);
       this.instances.set(userId, instance);
+    } else {
+      this.instances.get(userId)!.updateSettings(privateKey, maxWsolPerTrade, slippageBps!, computeUnitPrice!);
+    }
+  }
+
+  private updateSettings(privateKey?: string, maxWsolPerTrade?: number, slippageBps?: number, computeUnitPrice?: number | 'auto'): void {
+    if (privateKey) { 
+      this.ownWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+    }
+    if (maxWsolPerTrade) {
+      this.maxWsolPerTrade = maxWsolPerTrade;
+    }
+    if (slippageBps) {
+      this.slippageBps = slippageBps;
+    }
+    if (computeUnitPrice) {
+      this.computeUnitPrice = computeUnitPrice;
     }
   }
 

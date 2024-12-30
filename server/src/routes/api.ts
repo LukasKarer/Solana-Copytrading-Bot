@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { SolanaService } from "../services/solanaService.js";
 import { createClient } from "@supabase/supabase-js";
 import { ConnectionManager } from "../services/connectionManager.js";
+import CryptoJS from 'crypto-js'
 
 const router = express.Router();
 const supabase = createClient(
@@ -9,6 +10,8 @@ const supabase = createClient(
   process.env.SUPABASE_KEY!
 );
 const connectionManager = ConnectionManager.getInstance();
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
 
 // Middleware to verify JWT and extract userId
 const authenticateUser = async (
@@ -54,13 +57,14 @@ router.post(
 
       const db = await connectionManager.getDb();
       const collection = db.collection("settings");
+      const encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, ENCRYPTION_KEY!).toString();
 
       await collection.updateOne(
         { userId },
         {
           $set: {
             userId,
-            privateKey,
+            privateKey: encryptedPrivateKey,
             maxWsolPerTrade,
             slippageBps: slippageBps || 50,
             computeUnitPrice: computeUnitPrice || 'auto',
