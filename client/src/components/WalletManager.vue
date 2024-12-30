@@ -1,221 +1,251 @@
 <template>
   <div class="wallet-manager">
-    <div class="user-setup" v-if="!userId">
-      <h2>User Setup</h2>
-      <div class="input-group">
-        <input 
-          v-model="userIdInput"
-          placeholder="Enter User ID"
-          type="text"
-        />
-        <input 
-          v-model="privateKeyInput"
-          placeholder="Enter Private Key"
-          type="text"
-        />
-        <input 
-          v-model="maxWsolInput"
-          placeholder="Max WSOL per trade"
-          type="number"
-          step="0.001"
-        />
-        <button @click="setUserDetails">Set User Details</button>
-      </div>
-      <p class="error" v-if="userError">{{ userError }}</p>
-    </div>
+    <Card class="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle>Wallet Manager</CardTitle>
+      </CardHeader>
+      
+      <CardContent>
+        <div class="settings-group space-y-6">
+          <h3 class="text-lg font-semibold">Trading Settings</h3>
+          
+          <div class="grid gap-4">
+            <div class="grid gap-2">
+              <Label for="privateKey">Private Key</Label>
+              <Input 
+                id="privateKey"
+                v-model="privateKey"
+                placeholder="Enter Private Key"
+              />
+            </div>
+            
+            <div class="grid gap-2">
+              <Label for="maxWsol">SOL per trade</Label>
+              <Input 
+                id="maxWsol"
+                v-model="maxWsolInput"
+                placeholder="Max WSOL per trade"
+                type="number"
+                step="0.001"
+              />
+            </div>
 
-    <div v-else class="wallet-controls">
-      <h2>Wallet Manager</h2>
-      <div class="user-info">
-        <p>User ID: {{ userId }}</p>
-        <p>Max WSOL per trade: {{ maxWsolPerTrade }}</p>
-        <button @click="resetUserDetails">Change User</button>
-      </div>
+            <div class="grid gap-2">
+              <Label for="slippage">Slippage (%)</Label>
+              <Input 
+                id="slippage"
+                v-model="slippagePercent"
+                placeholder="Slippage percentage"
+                type="number"
+                min="0.01"
+                max="10"
+                step="0.01"
+              />
+            </div>
 
-      <div class="input-group">
-        <input 
-          v-model="newWallet"
-          placeholder="Enter wallet address"
-          type="text"
-        />
-        <button @click="addWallet">Add Wallet</button>
-      </div>
-      <p class="error" v-if="walletError">{{ walletError }}</p>
+            <div class="grid gap-2">
+              <Label for="feeType">Transaction Fee</Label>
+              <Select v-model="feeType">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select fee type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div class="wallet-list">
-        <h3>Watched Wallets</h3>
-        <ul>
-          <li v-for="wallet in watchedWallets" :key="wallet.address">
-            {{ wallet.address }}
-            <button @click="removeWallet(wallet.address)">Remove</button>
-          </li>
-        </ul>
-      </div>
-    </div>
+            <div v-if="feeType === 'custom'" class="grid gap-2">
+              <Label for="customFee">Transaction Fee (Lamports)</Label>
+              <Input 
+                id="customFee"
+                v-model="customComputeUnitPrice"
+                type="number"
+                placeholder="Enter custom fee"
+                min="1"
+              />
+            </div>
+
+            <Button @click="saveSettings" variant="default">Save Settings</Button>
+          </div>
+
+          <p class="text-sm text-muted-foreground">Default slippage is 0.5%</p>
+          <p v-if="feeType === 'custom'" class="text-sm text-muted-foreground">
+            1 SOL = 1 billion lamports
+          </p>
+          <p v-if="settingsError" class="text-sm text-destructive">{{ settingsError }}</p>
+        </div>
+
+        <Separator class="my-6" />
+
+        <div class="space-y-4">
+          <div class="grid gap-4">
+            <div class="grid gap-2">
+              <Label for="newWallet">Wallet Address</Label>
+              <div class="flex gap-2">
+                <Input 
+                  id="newWallet"
+                  v-model="newWallet"
+                  placeholder="Enter wallet address"
+                />
+                <Button @click="addWallet" variant="default">Add Wallet</Button>
+              </div>
+            </div>
+          </div>
+          <p v-if="walletError" class="text-sm text-destructive">{{ walletError }}</p>
+
+          <div class="space-y-2">
+            <h3 class="text-lg font-semibold">Watched Wallets</h3>
+            <div class="space-y-2">
+              <div v-for="wallet in watchedWallets" 
+                   :key="wallet" 
+                   class="flex items-center justify-between p-2 border rounded-lg">
+                <span class="text-sm">{{ wallet }}</span>
+                <Button @click="removeWallet(wallet)" variant="destructive" size="sm">
+                  Remove
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue';
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+import { useAuthStore } from '@/stores/auth';
+
+import Card from '@/components/ui/card/Card.vue';
+import CardHeader from '@/components/ui/card/CardHeader.vue';
+import CardTitle from '@/components/ui/card/CardTitle.vue';
+import CardContent from '@/components/ui/card/CardContent.vue';
+import Button from '@/components/ui/button/Button.vue';
+import Input from '@/components/ui/input/Input.vue';
+import Label from '@/components/ui/label/Label.vue';
+import Select from '@/components/ui/select/Select.vue';
+import SelectContent from '@/components/ui/select/SelectContent.vue';
+import SelectItem from '@/components/ui/select/SelectItem.vue';
+import SelectTrigger from '@/components/ui/select/SelectTrigger.vue';
+import SelectValue from '@/components/ui/select/SelectValue.vue';
+import Separator from '@/components/ui/separator/Separator.vue';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const authStore = useAuthStore();
 
-export default defineComponent({
-  name: 'WalletManager',
-  
-  data() {
-    return {
-      userId: '',
-      privateKey: '',
-      maxWsolPerTrade: 0.001,
-      userIdInput: '',
-      privateKeyInput: '',
-      maxWsolInput: 0.001,
-      newWallet: '',
-      watchedWallets: [] as { address: string }[],
-      walletError: '',
-      userError: '',
-      status: null as any,
-      statusInterval: null as number | null,
-    };
-  },
+// State
+const loading = ref(true);
+const privateKey = ref('');
+const maxWsolInput = ref(0.001);
+const newWallet = ref('');
+const watchedWallets = ref<string[]>([]);
+const walletError = ref('');
+const settingsError = ref('');
+const slippagePercent = ref(0.5);
+const feeType = ref('auto');
+const customComputeUnitPrice = ref(1000);
 
-  methods: {
-    setUserDetails() {
-      if (!this.userIdInput || !this.privateKeyInput || !this.maxWsolInput) {
-        this.userError = 'All fields are required';
-        return;
-      }
-      
-      this.userId = this.userIdInput;
-      this.privateKey = this.privateKeyInput;
-      this.maxWsolPerTrade = this.maxWsolInput;
-      this.userError = '';
-      
-      // Reset inputs
-      this.userIdInput = '';
-      this.privateKeyInput = '';
-      this.maxWsolInput = 0.001;
-    },
+// API instance
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    Authorization: `Bearer ${authStore.session?.access_token}`
+  }
+});
 
-    resetUserDetails() {
-      this.userId = '';
-      this.privateKey = '';
-      this.maxWsolPerTrade = 0.001;
-      this.watchedWallets = [];
-      if (this.statusInterval) {
-        clearInterval(this.statusInterval);
-        this.statusInterval = null;
-      }
-    },
+// Computed properties
+const computeUnitPrice = computed(() => 
+  feeType.value === 'auto' ? 'auto' : Number(customComputeUnitPrice.value)
+);
 
-    async addWallet() {
-      try {
-        this.walletError = '';
-        const response = await axios.post(`${API_BASE_URL}/wallets`, {
-          address: this.newWallet,
-          userId: this.userId,
-          privateKey: this.privateKey,
-          maxWsolPerTrade: this.maxWsolPerTrade
-        });
-        
-        if (response.data.success) {
-          this.watchedWallets.push({ address: this.newWallet });
-          this.newWallet = '';
-        }
-      } catch (error: any) {
-        this.walletError = error.response?.data?.error || 'Failed to add wallet';
-      }
-    },
+const slippageBps = computed(() => 
+  Math.round(slippagePercent.value * 100)
+);
 
-    async removeWallet(address: string) {
-      try {
-        const response = await axios.delete(`${API_BASE_URL}/wallets/${address}`, {
-          data: {
-            userId: this.userId
-          }
-        });
-        
-        if (response.data.success) {
-          this.watchedWallets = this.watchedWallets.filter(w => w.address !== address);
-        }
-      } catch (error: any) {
-        this.walletError = error.response?.data?.error || 'Failed to remove wallet';
-      }
-    },
-  },
+// Methods
+const saveSettings = async () => {
+  try {
+    settingsError.value = '';
+    if (!privateKey.value || !maxWsolInput.value || !slippagePercent.value) {
+      settingsError.value = 'All fields are required';
+      return;
+    }
+
+    const response = await api.post('/settings', {
+      privateKey: privateKey.value,
+      maxWsolPerTrade: maxWsolInput.value,
+      slippageBps: slippageBps.value,
+      computeUnitPrice: computeUnitPrice.value
+    });
+
+    if (response.data.success) {
+      console.log('Settings saved successfully');
+      privateKey.value = '';
+    }
+  } catch (error: any) {
+    settingsError.value = error.response?.data?.error || 'Failed to save settings';
+  }
+};
+
+const fetchWallets = async () => {
+  try {
+    loading.value = true;
+    const response = await api.get('/wallets');
+    if (response.data.success) {
+      watchedWallets.value = response.data.wallets;
+    }
+  } catch (error: any) {
+    walletError.value = error.response?.data?.error || 'Failed to load wallets';
+  } finally {
+    loading.value = false;
+  }
+};
+
+const addWallet = async () => {
+  try {
+    walletError.value = '';
+    if (!newWallet.value) {
+      walletError.value = 'Wallet address is required';
+      return;
+    }
+
+    const response = await api.post('/wallets', {
+      address: newWallet.value
+    });
+    
+    if (response.data.success) {
+      watchedWallets.value.push(newWallet.value);
+      newWallet.value = '';
+    }
+  } catch (error: any) {
+    walletError.value = error.response?.data?.error || 'Failed to add wallet';
+  }
+};
+
+const removeWallet = async (address: string) => {
+  try {
+    walletError.value = '';
+    const response = await api.delete(`/wallets/${address}`);
+    
+    if (response.data.success) {
+      watchedWallets.value = watchedWallets.value.filter(w => w !== address);
+    }
+  } catch (error: any) {
+    walletError.value = error.response?.data?.error || 'Failed to remove wallet';
+  }
+};
+
+// Lifecycle hooks
+onMounted(() => {
+  fetchWallets();
 });
 </script>
 
 <style scoped>
 .wallet-manager {
-  max-width: 600px;
-  margin: 0 auto;
   padding: 20px;
-}
-
-.input-group {
-  margin: 20px 0;
-  display: flex;
-  gap: 10px;
-}
-
-input {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  flex: 1;
-}
-
-button {
-  padding: 8px 16px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #45a049;
-}
-
-.error {
-  color: red;
-  margin-top: 5px;
-}
-
-.wallet-list {
-  margin-top: 20px;
-}
-
-.wallet-list ul {
-  list-style: none;
-  padding: 0;
-}
-
-.wallet-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-}
-
-.user-info {
-  background-color: #f5f5f5;
-  padding: 15px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-}
-
-.user-info button {
-  background-color: #666;
-  margin-top: 10px;
-}
-
-.user-info button:hover {
-  background-color: #555;
 }
 </style> 

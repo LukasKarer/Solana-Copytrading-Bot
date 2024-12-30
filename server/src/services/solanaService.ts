@@ -11,32 +11,60 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58';
 import { createJupiterApiClient, QuoteResponse } from '@jup-ag/api';
 import { ConnectionManager } from './connectionManager.js';
+import { MongoClient } from 'mongodb';
+
+interface TransactionDocument {
+  userId: string;
+  signature: string;
+  tradeTime: Date;
+  inputTokenMint: string;
+  inputTokenAmount: number;
+  outputTokenMint: string;
+  outputTokenAmount: number;
+}
 
 export class SolanaService {
-  private static readonly RPC_ENDPOINT = process.env.RPC_ENDPOINT!;
   private static readonly instances = new Map<string, SolanaService>();
+  private static readonly MAX_RECENT_TRANSACTIONS = 10;
 
   private connection: Connection;
   private watchedWallets: Map<string, number>;
   private ownWallet: Keypair;
   private readonly WSOL_ADDRESS: PublicKey;
   private maxWsolPerTrade: number;
+  private slippageBps: number;
+  private computeUnitPrice: number | 'auto';
   private jupiter: ReturnType<typeof createJupiterApiClient>;
   private userId: string;
+  private recentTransactions: Set<string> = new Set();
 
-  private constructor(privateKey: string, userId: string, maxWsolPerTrade: number) {
-    this.connection = ConnectionManager.getInstance(SolanaService.RPC_ENDPOINT).getConnection();
+  private constructor(
+    privateKey: string, 
+    userId: string, 
+    maxWsolPerTrade: number,
+    slippageBps: number = 50,  // Default 0.5%
+    computeUnitPrice: number | 'auto' = 'auto'
+  ) {
+    this.connection = ConnectionManager.getInstance().getConnection();
     this.watchedWallets = new Map();
     this.ownWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
     this.WSOL_ADDRESS = new PublicKey('So11111111111111111111111111111111111111112');
     this.maxWsolPerTrade = maxWsolPerTrade;
+    this.slippageBps = slippageBps;
+    this.computeUnitPrice = computeUnitPrice;
     this.jupiter = createJupiterApiClient();
     this.userId = userId;
   }
 
-  public static initialize(userId: string, privateKey: string, maxWsolPerTrade: number): void {
+  public static initialize(
+    userId: string, 
+    privateKey: string, 
+    maxWsolPerTrade: number,
+    slippageBps?: number | 50,
+    computeUnitPrice?: number | 'auto'
+  ): void {
     if (!this.instances.has(userId)) {
-      const instance = new SolanaService(privateKey, userId, maxWsolPerTrade);
+      const instance = new SolanaService(privateKey, userId, maxWsolPerTrade, slippageBps, computeUnitPrice);
       this.instances.set(userId, instance);
     }
   }
@@ -76,8 +104,7 @@ export class SolanaService {
     try {
       const subscriptionId = this.watchedWallets.get(walletAddress);
       if (subscriptionId || subscriptionId === 0) {
-        let status = await this.connection.removeAccountChangeListener(subscriptionId);
-        console.log('Remove account change listener status:', status);
+        await this.connection.removeAccountChangeListener(subscriptionId);
         this.watchedWallets.delete(walletAddress);
         console.log(`Stopped watching wallet: ${walletAddress}`);
       }
@@ -98,9 +125,27 @@ export class SolanaService {
       );
 
       if (signatures.length === 0) return;
+      
+      const signature = signatures[0].signature;
+      
+      // Check if we've already processed this transaction
+      if (this.recentTransactions.has(signature)) {
+        console.log('Transaction already processed, skipping:', signature);
+        return;
+      }
+
+      // Add to recent transactions cache
+      this.recentTransactions.add(signature);
+      // Remove oldest transaction if we exceed the limit
+      if (this.recentTransactions.size > SolanaService.MAX_RECENT_TRANSACTIONS) {
+        const firstItem = this.recentTransactions.values().next().value as string;
+        this.recentTransactions.delete(firstItem);
+      }
+
+      console.log('Transaction found:', signature);
 
       const transaction = await this.connection.getTransaction(
-        signatures[0].signature,
+        signature,
         {
           commitment: "finalized",
           maxSupportedTransactionVersion: 0,
@@ -113,6 +158,15 @@ export class SolanaService {
       if (!meta?.preTokenBalances || !meta?.postTokenBalances) return;
 
       const { preTokenBalances, postTokenBalances } = meta;
+      
+      if (preTokenBalances.length === 0 && postTokenBalances.length === 0) {
+        console.log("Skipping SOL transfer");
+        return;
+      }
+
+      const tokenBalance = postTokenBalances.find(
+        (balance) => balance.mint !== this.WSOL_ADDRESS.toString()
+      );
 
       let isBuy: boolean;
       // Log changes in token balances
@@ -129,22 +183,17 @@ export class SolanaService {
           ) {
             if (preAmount !== postAmount) {
               console.log(
-                `Token Mint: ${pre.mint}, Owner ${pre.owner
-                } Pre Amount: ${preAmount}, Post Amount: ${postAmount}, Diff Amount: ${postAmount - preAmount
-                }`
+                `Token Mint: ${pre.mint}, Owner ${pre.owner} Pre Amount: ${preAmount}, Post Amount: ${postAmount}, Diff Amount: ${postAmount - preAmount}`
               );
+              if (pre.mint === tokenBalance!.mint) {
+                isBuy = postAmount > preAmount;
+              }
             }
-            isBuy = postAmount > preAmount;
           }
         }
       });
-
-      const tokenBalance = postTokenBalances.find(
-        (balance) => balance.mint !== this.WSOL_ADDRESS.toString()
-      );
       console.log('Is Buy:', isBuy!);
 
-      //const tokenChanges = this.analyzeTokenChanges(transaction);
       await this.copyTrade(
         new PublicKey(tokenBalance!.mint),
         isBuy!,
@@ -155,42 +204,6 @@ export class SolanaService {
       console.error('Error handling transaction:', error);
     }
   }
-
-  /* private analyzeTokenChanges(
-    transaction: VersionedTransactionResponse
-  ): { inputToken: string; outputToken: string } | null {
-
-
-     const getTokenChange = (
-       pre: TokenBalance[],
-       post: TokenBalance[]
-     ): { inputToken: string; outputToken: string } | null => {
-       const decreasedToken = pre.find((preBalance) => {
-         const postBalance = post.find((p) => p.mint === preBalance.mint);
-         return (
-           postBalance && Number(postBalance.uiAmount) < Number(preBalance.uiAmount)
-         );
-       });
- 
-       const increasedToken = post.find((postBalance) => {
-         const preBalance = pre.find((p) => p.mint === postBalance.mint);
-         return (
-           preBalance && Number(postBalance.uiAmount) > Number(preBalance.uiAmount)
-         );
-       });
- 
-       if (decreasedToken && increasedToken) {
-         return {
-           inputToken: decreasedToken.mint,
-           outputToken: increasedToken.mint,
-         };
-       }
- 
-       return null;
-     }; 
-
-    return getTokenChange(preTokenBalances, postTokenBalances);
-  }*/
 
   private async copyTrade(
     tokenMint: PublicKey,
@@ -210,9 +223,10 @@ export class SolanaService {
       // Get quote from Jupiter
       const quote = await this.jupiter.quoteGet({
         amount: this.maxWsolPerTrade * LAMPORTS_PER_SOL,
+        swapMode: isBuy ? 'ExactIn' : 'ExactOut',
         inputMint: inputMint,
         outputMint: outputMint,
-        slippageBps: 50, // 0.5%
+        slippageBps: this.slippageBps,
       });
 
       if (!quote) {
@@ -234,7 +248,7 @@ export class SolanaService {
           quoteResponse: quote,
           userPublicKey: this.ownWallet.publicKey.toBase58(),
           wrapAndUnwrapSol: true,
-          computeUnitPriceMicroLamports: 'auto',
+          computeUnitPriceMicroLamports: this.computeUnitPrice,
         }
       });
 
@@ -247,37 +261,33 @@ export class SolanaService {
 
       const signature = await this.connection.sendTransaction(transaction);
 
-      /* const { blockhash, lastValidBlockHeight } =
-        await this.connection.getLatestBlockhash();
-      await this.connection.confirmTransaction({
-        blockhash,
-        lastValidBlockHeight,
+      // Modified MongoDB logging
+      const db = await ConnectionManager.getInstance().getDb();
+      
+      const collection = db.collection('transactions');
+      const transactionDoc: TransactionDocument = {
+        userId: this.userId,
         signature: signature,
-      }); */
+        tradeTime: new Date(),
+        inputTokenMint: quote.inputMint,
+        inputTokenAmount: quote.inputMint === this.WSOL_ADDRESS.toBase58() 
+          ? Number(quote.inAmount) / LAMPORTS_PER_SOL 
+          : Number(quote.inAmount), 
+        outputTokenMint: quote.outputMint,
+        outputTokenAmount: quote.outputMint === this.WSOL_ADDRESS.toBase58() 
+          ? Number(quote.outAmount) / LAMPORTS_PER_SOL 
+          : Number(quote.outAmount),
+      };
 
+      await collection.insertOne(transactionDoc);
+      console.log('Transaction logged to MongoDB');
       console.log('Swap executed successfully:', signature);
     } catch (error) {
       console.error('Error executing swap:', error);
     }
   }
 
-  // Utility method to get token accounts for a wallet
-  async getTokenAccounts(walletAddress: string): Promise<any[]> {
-    try {
-      const accounts = await this.connection.getParsedTokenAccountsByOwner(
-        new PublicKey(walletAddress),
-        { programId: TOKEN_PROGRAM_ID }
-      );
-
-      return accounts.value.map((account) => ({
-        mint: account.account.data.parsed.info.mint,
-        amount: account.account.data.parsed.info.tokenAmount.amount,
-        decimals: account.account.data.parsed.info.tokenAmount.decimals,
-        uiAmount: account.account.data.parsed.info.tokenAmount.uiAmount,
-      }));
-    } catch (error) {
-      console.error('Error getting token accounts:', error);
-      return [];
-    }
+  getWatchedWallets(): string[] {
+    return Array.from(this.watchedWallets.keys());
   }
 }
