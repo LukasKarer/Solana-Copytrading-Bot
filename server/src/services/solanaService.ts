@@ -146,7 +146,7 @@ export class SolanaService {
       const signature = signatures[0].signature;
       
       // Check if we've already processed this transaction
-      if (this.recentTransactions.has(signature)) {
+      /* if (this.recentTransactions.has(signature)) {
         console.log('Transaction already processed, skipping:', signature);
         return;
       }
@@ -157,7 +157,7 @@ export class SolanaService {
       if (this.recentTransactions.size > SolanaService.MAX_RECENT_TRANSACTIONS) {
         const firstItem = this.recentTransactions.values().next().value as string;
         this.recentTransactions.delete(firstItem);
-      }
+      } */
 
       console.log('Transaction found:', signature);
 
@@ -168,6 +168,7 @@ export class SolanaService {
           maxSupportedTransactionVersion: 0,
         }
       );
+      console.log(transaction);
 
       if (!transaction?.meta) return;
 
