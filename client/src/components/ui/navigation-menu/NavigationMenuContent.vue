@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cn } from 'src/@/lib/utils'
+import { cn } from 'src/lib/utils'
 import {
   NavigationMenuContent,
   type NavigationMenuContentEmits,
