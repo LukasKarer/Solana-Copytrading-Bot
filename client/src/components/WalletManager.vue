@@ -83,7 +83,7 @@
           <div class="grid gap-4">
             <div class="grid gap-2">
               <Label for="newWallet">Wallet Address</Label>
-              <div class="flex gap-2">
+              <div class="flex gap-2 items-center">
                 <Input 
                   id="newWallet"
                   v-model="newWallet"

@@ -1,12 +1,16 @@
 <template>
-  <div class="login-container">
-    <div class="login-box">
-      <h2>{{ showOTPInput ? 'Enter Verification Code' : 'Login' }}</h2>
+  <div class="flex justify-center items-center min-h-[80vh] px-4">
+    <Card class="w-full max-w-md">
+      <CardHeader>
+        <h2 class="text-2xl font-semibold text-center">
+          {{ showOTPInput ? 'Enter Verification Code' : 'Login' }}
+        </h2>
+      </CardHeader>
+      
       <form @submit.prevent="handleSubmit">
-        <div class="input-group">
-          <!-- Email input shown initially -->
+        <CardContent class="space-y-4">
           <template v-if="!showOTPInput">
-            <input
+            <Input
               v-model="email"
               type="email"
               placeholder="Email"
@@ -14,10 +18,11 @@
             />
           </template>
           
-          <!-- OTP input shown after email submission -->
           <template v-else>
-            <p class="info">Please enter the verification code sent to {{ email }}</p>
-            <input
+            <p class="text-sm text-muted-foreground text-center">
+              Please enter the verification code sent to {{ email }}
+            </p>
+            <Input
               v-model="otp"
               type="text"
               placeholder="Enter verification code"
@@ -26,23 +31,27 @@
               inputmode="numeric"
             />
           </template>
-        </div>
-        <p class="error" v-if="error">{{ error }}</p>
-        <button type="submit">
-          {{ showOTPInput ? 'Verify Code' : 'Send Login Link' }}
-        </button>
-        
-        <!-- Back button when showing OTP input -->
-        <button 
-          v-if="showOTPInput" 
-          type="button" 
-          class="secondary-button"
-          @click="resetForm"
-        >
-          Back to Email
-        </button>
+          
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        </CardContent>
+
+        <CardFooter class="flex flex-col gap-3">
+          <Button type="submit" class="w-full">
+            {{ showOTPInput ? 'Verify Code' : 'Send Login Link' }}
+          </Button>
+          
+          <Button 
+            v-if="showOTPInput" 
+            type="button" 
+            variant="outline"
+            @click="resetForm"
+            class="w-full"
+          >
+            Back to Email
+          </Button>
+        </CardFooter>
       </form>
-    </div>
+    </Card>
   </div>
 </template>
 
@@ -50,6 +59,9 @@
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -87,81 +99,4 @@ const handleSubmit = async () => {
     }
   }
 }
-</script>
-
-<style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 80vh;
-}
-
-.login-box {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 400px;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-input {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-button {
-  width: 100%;
-  padding: 0.75rem;
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #45a049;
-}
-
-.error {
-  color: red;
-  margin: 0.5rem 0;
-}
-
-.toggle-mode {
-  margin-top: 1rem;
-  text-align: center;
-}
-
-.toggle-mode a {
-  color: #4CAF50;
-  text-decoration: none;
-}
-
-.info {
-  color: #666;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.secondary-button {
-  margin-top: 1rem;
-  background: #ffffff;
-  color: #4CAF50;
-  border: 1px solid #4CAF50;
-}
-
-.secondary-button:hover {
-  background: #f5f5f5;
-}
-</style> 
+</script> 

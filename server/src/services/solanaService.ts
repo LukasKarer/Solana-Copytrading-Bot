@@ -146,7 +146,7 @@ export class SolanaService {
       const signature = signatures[0].signature;
       
       // Check if we've already processed this transaction
-      /* if (this.recentTransactions.has(signature)) {
+      if (this.recentTransactions.has(signature)) {
         console.log('Transaction already processed, skipping:', signature);
         return;
       }
@@ -157,20 +157,22 @@ export class SolanaService {
       if (this.recentTransactions.size > SolanaService.MAX_RECENT_TRANSACTIONS) {
         const firstItem = this.recentTransactions.values().next().value as string;
         this.recentTransactions.delete(firstItem);
-      } */
+      } 
 
-      console.log('Transaction found:', signature);
+      console.log('Transaction found:', signatures[0].signature);
 
       const transaction = await this.connection.getTransaction(
-        signature,
+        signatures[0].signature,
         {
-          commitment: "finalized",
+          commitment: "confirmed",
           maxSupportedTransactionVersion: 0,
         }
       );
-      console.log(transaction);
 
-      if (!transaction?.meta) return;
+      if (!transaction?.meta) {
+        console.log('Transaction meta not found');
+        return;
+      }
 
       const { meta } = transaction;
       if (!meta?.preTokenBalances || !meta?.postTokenBalances) return;
@@ -216,7 +218,7 @@ export class SolanaService {
         new PublicKey(tokenBalance!.mint),
         isBuy!,
         transaction
-      );
+      ); 
 
     } catch (error) {
       console.error('Error handling transaction:', error);
