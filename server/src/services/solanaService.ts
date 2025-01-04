@@ -280,7 +280,8 @@ export class SolanaService {
       transaction.sign([this.ownWallet]);
 
       const signature = await this.connection.sendTransaction(transaction, {
-        skipPreflight: true,
+        skipPreflight: false,
+        preflightCommitment: 'singleGossip',
       });
 
       // Modified MongoDB logging
