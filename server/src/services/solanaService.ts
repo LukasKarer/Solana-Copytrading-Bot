@@ -281,7 +281,7 @@ export class SolanaService {
 
       const signature = await this.connection.sendTransaction(transaction, {
         skipPreflight: false,
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       // Modified MongoDB logging
